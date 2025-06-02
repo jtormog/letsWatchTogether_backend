@@ -1,7 +1,6 @@
 <?php
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Third Party Services
@@ -14,25 +13,34 @@ return [
     |
     */
 
-    'postmark' => [
-        'token' => env('POSTMARK_TOKEN'),
-    ],
+    // Base URL for OAuth callbacks
+    'oauth_base_url' => env('APP_URL', 'http://localhost:8000') . '/api/auth/callback',
 
-    'ses' => [
-        'key' => env('AWS_ACCESS_KEY_ID'),
-        'secret' => env('AWS_SECRET_ACCESS_KEY'),
-        'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-    ],
-
-    'resend' => [
-        'key' => env('RESEND_KEY'),
-    ],
-
-    'slack' => [
-        'notifications' => [
-            'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
+    // OAuth providers configuration
+    'oauth_providers' => [
+        'google' => [
+            'client_id' => env('GOOGLE_CLIENT_ID'),
+            'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        ],
+        'facebook' => [
+            'client_id' => env('FACEBOOK_CLIENT_ID'),
+            'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
         ],
     ],
 
+    // Legacy support - maintain backward compatibility
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('APP_URL', 'http://localhost:8000') . '/api/auth/callback/google',
+    ],
+
+    'facebook' => [
+        'client_id' => env('FACEBOOK_CLIENT_ID'),
+        'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
+        'redirect' => env('APP_URL', 'http://localhost:8000') . '/api/auth/callback/facebook',
+    ],
+
+    // Next.js configuration
+    'nextjs_url' => env('NEXTJS_URL', 'http://localhost:3000'),
 ];
