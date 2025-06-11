@@ -192,7 +192,12 @@ class SocialAuthController extends Controller
             $token = $this->createAuthToken($user);
 
             $this->logSuccessfulAuth($provider, $user, $request);
-
+            Log::info('USUARIO_SOCIAL_PROCESADO', [
+                'user_id' => $user->id,
+                'provider' => $provider,
+                'email' => $user->email,
+                'name' => $user->name
+            ]);
             return $this->successResponseWithToken($user, $token);
 
         } catch (\Exception $e) {
@@ -333,9 +338,9 @@ class SocialAuthController extends Controller
 
     private function findOrCreateUser($socialUser, $provider)
     {
-        if (!$socialUser->email) {
-            throw new \Exception('No se pudo obtener el email del proveedor social');
-        }
+        // if (!$socialUser->email) {
+        //     throw new \Exception('No se pudo obtener el email del proveedor social');
+        // }
 
         $user = User::where('provider', $provider)
             ->where('provider_id', $socialUser->id)

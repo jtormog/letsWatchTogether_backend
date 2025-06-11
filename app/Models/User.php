@@ -49,7 +49,6 @@ class User extends Authenticatable
         ];
     }
 
-    // Relaciones
     public function platforms()
     {
         return $this->belongsToMany(Platform::class);

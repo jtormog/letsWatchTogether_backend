@@ -675,17 +675,10 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Obtener medios recomendados por amigos del usuario
-     * 
-     * @param Request $requesttas
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getFriendsRecommendations(Request $request)
     {
         $user = $request->user();
         
-        // Obtener IDs de todos los amigos del usuario
         $friendIds = DB::table('friendships')
             ->where(function($query) use ($user) {
                 $query->where('user_id', $user->id)
@@ -694,7 +687,6 @@ class UserController extends Controller
             ->where('status', 'accepted')
             ->get()
             ->map(function($friendship) use ($user) {
-                // Retornar el ID del amigo (no del usuario actual)
                 return $friendship->user_id === $user->id ? $friendship->friend_id : $friendship->user_id;
             })
             ->toArray();
@@ -707,18 +699,96 @@ class UserController extends Controller
             ]);
         }
         
-        // Obtener todos los medios recomendados por los amigos
         $recommendedMedia = DB::table('user_media')
             ->whereIn('user_id', $friendIds)
             ->where('recommended', true)
             ->distinct()
-            ->pluck('tmdb_id')
+            ->pluck('tmdb_id', 'type')
             ->toArray();
         
         return response()->json([
             'success' => true,
             'message' => 'Friends recommendations retrieved successfully',
             'data' => $recommendedMedia
+        ]);
+    }
+    
+    /**
+     * Obtener información del perfil del usuario
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getProfile(Request $request)
+    {
+        $user = $request->user();
+        
+        // Obtener estadísticas de medios del usuario
+        $mediaStats = DB::table('user_media')
+            ->where('user_id', $user->id)
+            ->select(
+                DB::raw('COUNT(*) as total'),
+                DB::raw("SUM(CASE WHEN status = 'watching' THEN 1 ELSE 0 END) as watching"),
+                DB::raw("SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed"),
+                DB::raw("SUM(CASE WHEN status = 'planned' THEN 1 ELSE 0 END) as planned"),
+                DB::raw("SUM(CASE WHEN type = 'movie' THEN 1 ELSE 0 END) as movies"),
+                DB::raw("SUM(CASE WHEN type = 'tv' THEN 1 ELSE 0 END) as tv_shows")
+            )
+            ->first();
+        
+        // Obtener número de amigos
+        $friendsCount = DB::table('friendships')
+            ->where(function($query) use ($user) {
+                $query->where('user_id', $user->id)
+                      ->orWhere('friend_id', $user->id);
+            })
+            ->where('status', 'accepted')
+            ->count();
+        
+        // Obtener plataformas suscritas
+        $platforms = DB::table('user_platform')
+            ->join('platforms', 'user_platform.platform_id', '=', 'platforms.id')
+            ->where('user_platform.user_id', $user->id)
+            ->select('platforms.id', 'platforms.name')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'User profile retrieved successfully',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'provider' => $user->provider,
+                'avatar' => $user->avatar,
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+                'stats' => [
+                    'total_media' => $mediaStats->total ?? 0,
+                    'watching' => $mediaStats->watching ?? 0,
+                    'completed' => $mediaStats->completed ?? 0,
+                    'planned' => $mediaStats->planned ?? 0,
+                    'movies' => $mediaStats->movies ?? 0,
+                    'tv_shows' => $mediaStats->tv_shows ?? 0,
+                    'friends' => $friendsCount,
+                    // Campos adicionales para compatibilidad con Next.js
+                    'seriesVistas' => $mediaStats->tv_shows ?? 0,
+                    'peliculasVistas' => $mediaStats->movies ?? 0,
+                    'episodiosVistos' => 0, // Este cálculo podría agregarse después
+                    'amigos' => $friendsCount
+                ],
+                'platforms' => $platforms->toArray(),
+                'preferences' => [
+                    'language' => 'es',
+                    'notifications' => true,
+                    'autoplay' => true
+                ],
+                'subscription' => [
+                    'platforms' => $platforms->pluck('name')->toArray(),
+                    'plan' => 'basic'
+                ]
+            ]
         ]);
     }
 }

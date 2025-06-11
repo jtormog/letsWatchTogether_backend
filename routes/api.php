@@ -28,27 +28,6 @@ Route::prefix('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
     
     /**
-     * Cerrar sesión de todos los dispositivos
-     * POST /auth/logout-all - Requiere: autenticación Bearer token
-     * Retorna: mensaje de confirmación
-     */
-    Route::post('/logout-all', [AuthController::class, 'logoutAll'])->middleware('auth:sanctum');
-    
-    /**
-     * Refrescar token de acceso
-     * POST /auth/refresh - Requiere: autenticación Bearer token
-     * Retorna: nuevo token de acceso
-     */
-    Route::post('/refresh', [AuthController::class, 'refresh'])->middleware('auth:sanctum');
-    
-    /**
-     * Obtener lista de proveedores OAuth disponibles
-     * GET /auth/providers - No requiere parámetros
-     * Retorna: array con proveedores soportados (google, facebook)
-     */
-    Route::get('/providers', [SocialAuthController::class, 'getProviders']);
-    
-    /**
      * Obtener URL de redirección para OAuth
      * GET /auth/{provider}/redirect - Espera: provider (google|facebook)
      * Retorna: URL de autorización del proveedor
@@ -84,26 +63,16 @@ Route::prefix('auth')->group(function () {
      */
     Route::post('/{provider}/token', [SocialAuthController::class, 'loginWithToken'])
         ->where('provider', 'google|facebook');
-    
-    Route::middleware('auth:sanctum')->group(function () {
-        /**
-         * Vincular cuenta social al usuario actual
-         * POST /auth/{provider}/link - Requiere: autenticación + access_token del proveedor
-         * Retorna: confirmación de vinculación
-         */
-        Route::post('/{provider}/link', [SocialAuthController::class, 'linkAccount'])
-            ->where('provider', 'google|facebook');
-        
-        /**
-         * Desvincular cuenta social del usuario
-         * DELETE /auth/social/unlink - Requiere: autenticación Bearer token
-         * Retorna: confirmación de desvinculación
-         */
-        Route::delete('/social/unlink', [SocialAuthController::class, 'unlinkAccount']);
-    });
 });
 
 Route::middleware('auth:sanctum')->group(function () {
+    /**
+     * Obtener información del perfil del usuario
+     * GET /user/profile - Requiere: autenticación Bearer token
+     * Retorna: información completa del usuario autenticado
+     */
+    Route::get('/user/profile', [UserController::class, 'getProfile']);
+    
     /**
      * Obtener medios del usuario por estado
      * GET /user/media/{status} - Requiere: autenticación Bearer token
