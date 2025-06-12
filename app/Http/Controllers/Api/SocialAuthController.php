@@ -30,7 +30,7 @@ class SocialAuthController extends Controller
 
     private function getNextjsUrl()
     {
-        return config('services.nextjs_url', 'http://localhost:3000');
+        return config('services.nextjs_url');
     }
 
     private function buildNextjsRedirectUrl($provider, $params)
