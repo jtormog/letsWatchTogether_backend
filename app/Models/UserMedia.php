@@ -3,18 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class UserMedia extends Model
 {
-    use HasFactory;
-
     protected $table = 'user_media';
 
     protected $fillable = [
         'user_id',
         'tmdb_id',
         'recommended',
+        'liked',
         'type',
         'status',
         'episode',
@@ -24,6 +22,7 @@ class UserMedia extends Model
 
     protected $casts = [
         'recommended' => 'boolean',
+        'liked' => 'boolean',
         'invitation_accepted' => 'boolean',
     ];
 

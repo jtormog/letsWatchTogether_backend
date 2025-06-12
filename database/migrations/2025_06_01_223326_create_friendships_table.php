@@ -6,14 +6,8 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Disable transaction wrapping for this migration.
-     */
     public $withinTransaction = false;
 
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('friendships', function (Blueprint $table) {
@@ -24,16 +18,12 @@ return new class extends Migration
             $table->timestamp('accepted_at')->nullable();
             $table->timestamps();
 
-            // Prevenir duplicados y auto-amistad
             $table->unique(['user_id', 'friend_id']);
             $table->index(['user_id', 'status']);
             $table->index(['friend_id', 'status']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('friendships');

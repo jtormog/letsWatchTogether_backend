@@ -6,23 +6,10 @@ use Illuminate\Console\Command;
 
 class CheckOAuthConfig extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'oauth:check {provider?}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Verificar la configuración OAuth para los proveedores sociales';
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
         $provider = $this->argument('provider');
@@ -33,11 +20,9 @@ class CheckOAuthConfig extends Command
             $this->info('🔍 Verificando configuración OAuth...');
             $this->newLine();
             
-            // Verificar configuraciones generales
             $this->checkGeneralConfig();
             $this->newLine();
             
-            // Verificar cada proveedor
             $providers = ['google', 'facebook'];
             foreach ($providers as $provider) {
                 $this->checkProvider($provider);
@@ -76,7 +61,6 @@ class CheckOAuthConfig extends Command
         $this->line("  Client Secret: " . ($clientSecret ? "✅ Configurado" : "❌ No configurado"));
         $this->line("  Redirect URI: " . ($redirect ? "✅ {$redirect}" : "❌ No configurado"));
         
-        // Verificar si todas las credenciales están configuradas
         if ($clientId && $clientSecret && $redirect) {
             $this->info("  ✅ {$provider} completamente configurado");
         } else {

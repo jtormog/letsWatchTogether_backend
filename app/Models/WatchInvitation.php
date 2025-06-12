@@ -3,20 +3,24 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class WatchInvitation extends Model
 {
-    use HasFactory;
-
     protected $fillable = [
         'friendship_id',
+        'sender_id',
         'tmdb_id',
+        'type',
         'status',
     ];
 
     public function friendship()
     {
         return $this->belongsTo(Friendship::class);
+    }
+
+    public function sender()
+    {
+        return $this->belongsTo(User::class, 'sender_id');
     }
 }

@@ -8,49 +8,6 @@ use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
-    /**
-     * Obtener medios del usuario por estado
-     * 
-     * @param Request $request
-     * @param string $status
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getMediaByStatus(Request $request, $status)
-    {
-        // Validar que el status sea uno de los valores permitidos
-        $validStatuses = ['watching', 'completed', 'planned'];
-        
-        if (!in_array($status, $validStatuses)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid status. Valid statuses are: ' . implode(', ', $validStatuses),
-                'data' => null
-            ], 400);
-        }
-
-        // Obtener el usuario autenticado
-        $user = $request->user();
-        
-        // Consultar los medios del usuario con el status especificado
-        $media = DB::table('user_media')
-            ->where('user_id', $user->id)
-            ->where('status', $status)
-            ->select('tmdb_id', 'type')
-            ->get();
-
-        return response()->json([
-            'success' => true,
-            'message' => "Media with status '{$status}' retrieved successfully",
-            'data' => $media
-        ]);
-    }
-    
-    /**
-     * Obtener estadísticas de medios del usuario
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getMediaStats(Request $request)
     {
         $user = $request->user();
@@ -75,18 +32,10 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Suscribirse a una plataforma
-     * 
-     * @param Request $request
-     * @param int $platformId
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function subscribeToPlatform(Request $request, $platformId)
     {
         $user = $request->user();
         
-        // Verificar si la plataforma existe
         $platformExists = DB::table('platforms')->where('id', $platformId)->exists();
         
         if (!$platformExists) {
@@ -97,14 +46,12 @@ class UserController extends Controller
             ], 404);
         }
         
-        // Verificar si ya está suscrito
         $existingSubscription = DB::table('user_platform')
             ->where('user_id', $user->id)
             ->where('platform_id', $platformId)
             ->first();
             
         if ($existingSubscription) {
-            // Activar la suscripción si estaba desactivada
             DB::table('user_platform')
                 ->where('user_id', $user->id)
                 ->where('platform_id', $platformId)
@@ -117,7 +64,6 @@ class UserController extends Controller
             ]);
         }
         
-        // Crear nueva suscripción
         DB::table('user_platform')->insert([
             'user_id' => $user->id,
             'platform_id' => $platformId,
@@ -133,12 +79,6 @@ class UserController extends Controller
         ], 201);
     }
     
-    /**
-     * Obtener plataformas suscritas del usuario
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getSubscribedPlatforms(Request $request)
     {
         $user = $request->user();
@@ -157,13 +97,6 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Desuscribirse de una plataforma
-     * 
-     * @param Request $request
-     * @param int $platformId
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function unsubscribeFromPlatform(Request $request, $platformId)
     {
         $user = $request->user();
@@ -182,7 +115,6 @@ class UserController extends Controller
             ], 404);
         }
         
-        // Desactivar la suscripción
         DB::table('user_platform')
             ->where('user_id', $user->id)
             ->where('platform_id', $platformId)
@@ -195,22 +127,29 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Enviar petición de amistad
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function sendFriendRequest(Request $request)
     {
         $request->validate([
-            'friend_id' => 'required|integer|exists:users,id'
+            'friend_email' => 'required|email|exists:users,email'
         ]);
         
         $user = $request->user();
-        $friendId = $request->friend_id;
+        $friendEmail = $request->friend_email;
         
-        // No permitir enviarse petición a sí mismo
+        $friend = DB::table('users')
+            ->where('email', $friendEmail)
+            ->first();
+            
+        if (!$friend) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User with this email not found',
+                'data' => null
+            ], 404);
+        }
+        
+        $friendId = $friend->id;
+        
         if ($user->id === $friendId) {
             return response()->json([
                 'success' => false,
@@ -219,7 +158,6 @@ class UserController extends Controller
             ], 400);
         }
         
-        // Verificar si ya existe una petición pendiente o amistad activa
         $existingFriendship = DB::table('friendships')
             ->where(function($query) use ($user, $friendId) {
                 $query->where('user_id', $user->id)->where('friend_id', $friendId);
@@ -251,7 +189,6 @@ class UserController extends Controller
             }
         }
         
-        // Crear nueva petición de amistad
         $friendshipId = DB::table('friendships')->insertGetId([
             'user_id' => $user->id,
             'friend_id' => $friendId,
@@ -263,17 +200,17 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Friend request sent successfully',
-            'data' => ['friendship_id' => $friendshipId]
+            'data' => [
+                'friendship_id' => $friendshipId,
+                'friend' => [
+                    'id' => $friend->id,
+                    'name' => $friend->name,
+                    'email' => $friend->email
+                ]
+            ]
         ], 201);
     }
     
-    /**
-     * Responder a petición de amistad (aceptar o denegar)
-     * 
-     * @param Request $request
-     * @param int $friendshipId
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function respondToFriendRequest(Request $request, $friendshipId)
     {
         $request->validate([
@@ -283,10 +220,9 @@ class UserController extends Controller
         $user = $request->user();
         $action = $request->action;
         
-        // Buscar la petición de amistad
         $friendship = DB::table('friendships')
             ->where('id', $friendshipId)
-            ->where('friend_id', $user->id) // Solo el receptor puede responder
+            ->where('friend_id', $user->id)
             ->where('status', 'pending')
             ->first();
             
@@ -298,7 +234,6 @@ class UserController extends Controller
             ], 404);
         }
         
-        // Actualizar el estado según la acción
         $newStatus = $action === 'accept' ? 'accepted' : 'declined';
         $acceptedAt = $action === 'accept' ? now() : null;
         
@@ -324,23 +259,17 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Enviar invitación para ver contenido juntos
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function sendWatchInvitation(Request $request)
     {
         $request->validate([
             'friend_id' => 'required|integer|exists:users,id',
-            'tmdb_id' => 'required|integer'
+            'tmdb_id' => 'required|integer',
+            'type' => 'required|string|in:movie,tv'
         ]);
         
         $user = $request->user();
         $friendId = $request->friend_id;
         
-        // No permitir enviarse invitación a sí mismo
         if ($user->id === $friendId) {
             return response()->json([
                 'success' => false,
@@ -349,7 +278,6 @@ class UserController extends Controller
             ], 400);
         }
         
-        // Buscar la amistad entre los usuarios
         $friendship = DB::table('friendships')
             ->where(function($query) use ($user, $friendId) {
                 $query->where('user_id', $user->id)->where('friend_id', $friendId);
@@ -368,10 +296,10 @@ class UserController extends Controller
             ], 403);
         }
         
-        // Verificar si ya existe una invitación para el mismo contenido y amistad
         $existingInvitation = DB::table('watch_invitations')
             ->where('friendship_id', $friendship->id)
             ->where('tmdb_id', $request->tmdb_id)
+            ->where('type', $request->type)
             ->first();
             
         if ($existingInvitation) {
@@ -386,10 +314,11 @@ class UserController extends Controller
             ], 400);
         }
         
-        // Crear nueva invitación
         $invitationId = DB::table('watch_invitations')->insertGetId([
             'friendship_id' => $friendship->id,
+            'sender_id' => $user->id,
             'tmdb_id' => $request->tmdb_id,
+            'type' => $request->type,
             'status' => 'pending',
             'created_at' => now(),
             'updated_at' => now()
@@ -401,18 +330,12 @@ class UserController extends Controller
             'data' => [
                 'invitation_id' => $invitationId,
                 'friendship_id' => $friendship->id,
-                'tmdb_id' => $request->tmdb_id
+                'tmdb_id' => $request->tmdb_id,
+                'type' => $request->type
             ]
         ], 201);
     }
     
-    /**
-     * Responder a invitación de watch (aceptar o declinar)
-     * 
-     * @param Request $request
-     * @param int $invitationId
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function respondToWatchInvitation(Request $request, $invitationId)
     {
         $request->validate([
@@ -422,13 +345,11 @@ class UserController extends Controller
         $user = $request->user();
         $action = $request->action;
         
-        // Buscar la invitación y verificar que el usuario puede responder
         $invitation = DB::table('watch_invitations')
             ->join('friendships', 'watch_invitations.friendship_id', '=', 'friendships.id')
             ->where('watch_invitations.id', $invitationId)
             ->where('watch_invitations.status', 'pending')
             ->where(function($query) use ($user) {
-                // El usuario puede responder si es parte de la amistad
                 $query->where('friendships.user_id', $user->id)
                       ->orWhere('friendships.friend_id', $user->id);
             })
@@ -443,7 +364,6 @@ class UserController extends Controller
             ], 404);
         }
         
-        // Actualizar el estado según la acción
         $newStatus = $action === 'accept' ? 'accepted' : 'declined';
         
         DB::table('watch_invitations')
@@ -455,30 +375,21 @@ class UserController extends Controller
         
         $message = $action === 'accept' 
             ? 'Watch invitation accepted successfully' 
-            : 'Watch invitation declined successfully';
-            
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-            'data' => [
-                'invitation_id' => $invitationId,
-                'friendship_id' => $invitation->friendship_id,
-                'tmdb_id' => $invitation->tmdb_id,
-                'status' => $newStatus
-            ]
-        ]);
+            : 'Watch invitation declined successfully';            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'invitation_id' => $invitationId,
+                    'friendship_id' => $invitation->friendship_id,
+                    'tmdb_id' => $invitation->tmdb_id,
+                    'type' => $invitation->type,
+                    'status' => $newStatus
+                ]
+            ]);
     }
     
-    /**
-     * Obtener invitaciones de watch recibidas
-     * 
-     * @param Request $request
-     * @param string $status
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getReceivedWatchInvitations(Request $request, $status = 'pending')
     {
-        // Validar que el status sea uno de los valores permitidos
         $validStatuses = ['pending', 'accepted', 'declined'];
         
         if (!in_array($status, $validStatuses)) {
@@ -503,8 +414,8 @@ class UserController extends Controller
                 });
             })
             ->where('watch_invitations.status', $status)
+            ->where('watch_invitations.sender_id', '!=', $user->id)
             ->where(function($query) use ($user) {
-                // Solo mostrar invitaciones donde el usuario actual es parte de la amistad
                 $query->where('friendships.user_id', $user->id)
                       ->orWhere('friendships.friend_id', $user->id);
             })
@@ -512,6 +423,7 @@ class UserController extends Controller
                 'watch_invitations.id',
                 'watch_invitations.friendship_id',
                 'watch_invitations.tmdb_id',
+                'watch_invitations.type',
                 'watch_invitations.status',
                 'watch_invitations.created_at',
                 'friend.name as friend_name',
@@ -527,16 +439,8 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Obtener invitaciones de watch del usuario (todas las de sus amistades)
-     * 
-     * @param Request $request
-     * @param string $status
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getSentWatchInvitations(Request $request, $status = 'pending')
     {
-        // Validar que el status sea uno de los valores permitidos
         $validStatuses = ['pending', 'accepted', 'declined'];
         
         if (!in_array($status, $validStatuses)) {
@@ -561,8 +465,8 @@ class UserController extends Controller
                 });
             })
             ->where('watch_invitations.status', $status)
+            ->where('watch_invitations.sender_id', $user->id)
             ->where(function($query) use ($user) {
-                // Solo mostrar invitaciones donde el usuario actual es parte de la amistad
                 $query->where('friendships.user_id', $user->id)
                       ->orWhere('friendships.friend_id', $user->id);
             })
@@ -570,6 +474,7 @@ class UserController extends Controller
                 'watch_invitations.id',
                 'watch_invitations.friendship_id',
                 'watch_invitations.tmdb_id',
+                'watch_invitations.type',
                 'watch_invitations.status',
                 'watch_invitations.created_at',
                 'friend.name as friend_name',
@@ -585,17 +490,10 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Obtener información social del usuario con sus amigos y actividad compartida
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getSocialData(Request $request)
     {
         $user = $request->user();
         
-        // Obtener todas las amistades aceptadas del usuario
         $friendships = DB::table('friendships')
             ->join('users as friend', function($join) use ($user) {
                 $join->on(function($query) use ($user) {
@@ -612,6 +510,7 @@ class UserController extends Controller
                 'friend.id as friend_id',
                 'friend.name as friend_name',
                 'friend.email as friend_email',
+                'friend.avatar as friend_avatar',
                 'friendships.created_at as friendship_since'
             )
             ->get();
@@ -619,27 +518,27 @@ class UserController extends Controller
         $socialData = [];
         
         foreach ($friendships as $friendship) {
-            // Obtener series completadas juntos (invitaciones aceptadas)
             $completedTogether = DB::table('watch_invitations')
                 ->where('friendship_id', $friendship->friendship_id)
                 ->where('status', 'accepted')
-                ->pluck('tmdb_id')
+                ->select('tmdb_id', 'type')
+                ->get()
                 ->toArray();
             
-            // Obtener series que están viendo juntos (invitaciones pendientes)
             $watchingTogether = DB::table('watch_invitations')
                 ->where('friendship_id', $friendship->friendship_id)
                 ->where('status', 'pending')
-                ->pluck('tmdb_id')
+                ->select('tmdb_id', 'type')
+                ->get()
                 ->toArray();
             
-            // Construir datos del amigo
             $friendData = [
                 'friendship_id' => $friendship->friendship_id,
                 'friend' => [
                     'id' => $friendship->friend_id,
                     'name' => $friendship->friend_name,
-                    'email' => $friendship->friend_email
+                    'email' => $friendship->friend_email,
+                    'avatar' => $friendship->friend_avatar
                 ],
                 'friendship_since' => $friendship->friendship_since,
                 'series_completed_together' => $completedTogether,
@@ -651,7 +550,6 @@ class UserController extends Controller
             $socialData[] = $friendData;
         }
         
-        // Estadísticas generales
         $totalFriends = count($socialData);
         $totalSeriesCompleted = array_sum(array_column($socialData, 'total_completed'));
         $totalSeriesWatching = array_sum(array_column($socialData, 'total_watching'));
@@ -663,7 +561,8 @@ class UserController extends Controller
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
-                    'email' => $user->email
+                    'email' => $user->email,
+                    'avatar' => $user->avatar
                 ],
                 'stats' => [
                     'total_friends' => $totalFriends,
@@ -713,17 +612,10 @@ class UserController extends Controller
         ]);
     }
     
-    /**
-     * Obtener información del perfil del usuario
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function getProfile(Request $request)
     {
         $user = $request->user();
         
-        // Obtener estadísticas de medios del usuario
         $mediaStats = DB::table('user_media')
             ->where('user_id', $user->id)
             ->select(
@@ -736,7 +628,6 @@ class UserController extends Controller
             )
             ->first();
         
-        // Obtener número de amigos
         $friendsCount = DB::table('friendships')
             ->where(function($query) use ($user) {
                 $query->where('user_id', $user->id)
@@ -745,7 +636,6 @@ class UserController extends Controller
             ->where('status', 'accepted')
             ->count();
         
-        // Obtener plataformas suscritas
         $platforms = DB::table('user_platform')
             ->join('platforms', 'user_platform.platform_id', '=', 'platforms.id')
             ->where('user_platform.user_id', $user->id)
@@ -772,10 +662,9 @@ class UserController extends Controller
                     'movies' => $mediaStats->movies ?? 0,
                     'tv_shows' => $mediaStats->tv_shows ?? 0,
                     'friends' => $friendsCount,
-                    // Campos adicionales para compatibilidad con Next.js
                     'seriesVistas' => $mediaStats->tv_shows ?? 0,
                     'peliculasVistas' => $mediaStats->movies ?? 0,
-                    'episodiosVistos' => 0, // Este cálculo podría agregarse después
+                    'episodiosVistos' => 0,
                     'amigos' => $friendsCount
                 ],
                 'platforms' => $platforms->toArray(),
@@ -789,6 +678,336 @@ class UserController extends Controller
                     'plan' => 'basic'
                 ]
             ]
+        ]);
+    }
+    
+    public function getFriendsWantToSee(Request $request)
+    {
+        $user = $request->user();
+        
+        $friendIds = DB::table('friendships')
+            ->where(function($query) use ($user) {
+                $query->where('user_id', $user->id)
+                      ->orWhere('friend_id', $user->id);
+            })
+            ->where('status', 'accepted')
+            ->get()
+            ->map(function($friendship) use ($user) {
+                return $friendship->user_id === $user->id ? $friendship->friend_id : $friendship->user_id;
+            })
+            ->toArray();
+        
+        if (empty($friendIds)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No friends found',
+                'data' => []
+            ]);
+        }
+        
+        $friendsWantToSee = DB::table('user_media')
+            ->join('users', 'user_media.user_id', '=', 'users.id')
+            ->whereIn('user_media.user_id', $friendIds)
+            ->where('user_media.status', 'planned')
+            ->select(
+                'user_media.tmdb_id',
+                'user_media.type',
+                'users.id as user_id',
+                'users.name as user_name',
+                'user_media.created_at as added_at'
+            )
+            ->orderBy('user_media.created_at', 'desc')
+            ->get()
+            ->groupBy('tmdb_id')
+            ->map(function($mediaGroup) {
+                $firstMedia = $mediaGroup->first();
+                return [
+                    'tmdb_id' => $firstMedia->tmdb_id,
+                    'type' => $firstMedia->type,
+                    'users_who_want_to_see' => $mediaGroup->map(function($media) {
+                        return [
+                            'user_id' => $media->user_id,
+                            'user_name' => $media->user_name,
+                            'added_at' => $media->added_at
+                        ];
+                    })->toArray()
+                ];
+            })
+            ->values()
+            ->toArray();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Friends want to see media retrieved successfully',
+            'data' => $friendsWantToSee
+        ]);
+    }
+    
+    public function getMediaByStatus(Request $request, $status)
+    {
+        $user = $request->user();
+        
+        $validStatuses = ['watching', 'completed', 'planned'];
+        
+        if (!in_array($status, $validStatuses)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid status. Valid statuses are: ' . implode(', ', $validStatuses),
+                'data' => null
+            ], 400);
+        }
+        
+        $media = DB::table('user_media')
+            ->where('user_id', $user->id)
+            ->where('status', $status)
+            ->select(
+                'id',
+                'tmdb_id',
+                'type',
+                'status',
+                'recommended',
+                'liked',
+                'episode',
+                'watching_with',
+                'invitation_accepted',
+                'created_at',
+                'updated_at'
+            )
+            ->orderBy('created_at', 'desc')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'message' => "Media with status '{$status}' retrieved successfully",
+            'data' => $media
+        ]);
+    }
+    
+    public function getLikedMedia(Request $request)
+    {
+        $user = $request->user();
+        
+        $likedMedia = DB::table('user_media')
+            ->where('user_id', $user->id)
+            ->where('liked', true)
+            ->select(
+                'id',
+                'tmdb_id',
+                'type',
+                'status',
+                'recommended',
+                'liked',
+                'episode',
+                'watching_with',
+                'invitation_accepted',
+                'created_at',
+                'updated_at'
+            )
+            ->orderBy('created_at', 'desc')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Liked media retrieved successfully',
+            'data' => $likedMedia
+        ]);
+    }
+    
+    public function createOrUpdateUserMedia(Request $request)
+    {
+        $request->validate([
+            'tmdb_id' => 'required|integer',
+            'recommended' => 'required|boolean',
+            'liked' => 'nullable|boolean',
+            'type' => 'required|string|in:movie,tv',
+            'status' => 'required|string|in:watching,completed,planned',
+            'episode' => 'nullable|string'
+        ]);
+        
+        $user = $request->user();
+        
+        $existingMedia = DB::table('user_media')
+            ->where('user_id', $user->id)
+            ->where('tmdb_id', $request->tmdb_id)
+            ->first();
+        
+        $mediaData = [
+            'user_id' => $user->id,
+            'tmdb_id' => $request->tmdb_id,
+            'recommended' => $request->recommended,
+            'liked' => $request->liked ?? false,
+            'type' => $request->type,
+            'status' => $request->status,
+            'episode' => $request->episode,
+            'updated_at' => now()
+        ];
+        
+        if ($existingMedia) {
+            DB::table('user_media')
+                ->where('id', $existingMedia->id)
+                ->update($mediaData);
+            
+            $mediaData['id'] = $existingMedia->id;
+            $mediaData['created_at'] = $existingMedia->created_at;
+            $message = 'User media updated successfully';
+        } else {
+            $mediaData['created_at'] = now();
+            $mediaId = DB::table('user_media')->insertGetId($mediaData);
+            $mediaData['id'] = $mediaId;
+            $message = 'User media created successfully';
+        }
+        
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $mediaData
+        ], $existingMedia ? 200 : 201);
+    }
+    
+    public function getUserMediaByTmdbId(Request $request, $tmdbId, $type)
+    {
+        $user = $request->user();
+        
+        if (!in_array($type, ['movie', 'tv'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid type. Valid types are: movie, tv',
+                'data' => null
+            ], 400);
+        }
+        
+        $userMedia = DB::table('user_media')
+            ->where('user_id', $user->id)
+            ->where('tmdb_id', $tmdbId)
+            ->where('type', $type)
+            ->select(
+                'id',
+                'tmdb_id',
+                'recommended',
+                'liked',
+                'type',
+                'status',
+                'episode',
+                'watching_with',
+                'invitation_accepted',
+                'created_at',
+                'updated_at'
+            )
+            ->first();
+        
+        if (!$userMedia) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Media not found for this user',
+                'data' => null
+            ], 404);
+        }
+        
+        $watchingWithUser = null;
+        if ($userMedia->watching_with) {
+            $watchingWithUser = DB::table('users')
+                ->where('id', $userMedia->watching_with)
+                ->select('id', 'name', 'email')
+                ->first();
+        }
+        
+        $response = [
+            'id' => $userMedia->id,
+            'tmdb_id' => $userMedia->tmdb_id,
+            'recommended' => (bool) $userMedia->recommended,
+            'liked' => (bool) $userMedia->liked,
+            'type' => $userMedia->type,
+            'status' => $userMedia->status,
+            'episode' => $userMedia->episode,
+            'watching_with' => $userMedia->watching_with,
+            'watching_with_user' => $watchingWithUser,
+            'invitation_accepted' => (bool) $userMedia->invitation_accepted,
+            'created_at' => $userMedia->created_at,
+            'updated_at' => $userMedia->updated_at
+        ];
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'User media retrieved successfully',
+            'data' => $response
+        ]);
+    }
+    
+    public function getFriendRequests(Request $request, $status = 'pending')
+    {
+        $validStatuses = ['pending', 'accepted', 'declined'];
+        
+        if (!in_array($status, $validStatuses)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid status. Valid statuses are: ' . implode(', ', $validStatuses),
+                'data' => null
+            ], 400);
+        }
+        
+        $user = $request->user();
+        
+        $friendRequests = DB::table('friendships')
+            ->join('users as sender', 'friendships.user_id', '=', 'sender.id')
+            ->where('friendships.friend_id', $user->id)
+            ->where('friendships.status', $status)
+            ->select(
+                'friendships.id as friendship_id',
+                'friendships.status',
+                'friendships.created_at',
+                'friendships.updated_at',
+                'friendships.accepted_at',
+                'sender.id as sender_id',
+                'sender.name as sender_name',
+                'sender.email as sender_email',
+                'sender.avatar as sender_avatar'
+            )
+            ->orderBy('friendships.created_at', 'desc')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'message' => "Friend requests with status '{$status}' retrieved successfully",
+            'data' => $friendRequests
+        ]);
+    }
+    
+    public function getSentFriendRequests(Request $request, $status = 'pending')
+    {
+        $validStatuses = ['pending', 'accepted', 'declined'];
+        
+        if (!in_array($status, $validStatuses)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid status. Valid statuses are: ' . implode(', ', $validStatuses),
+                'data' => null
+            ], 400);
+        }
+        
+        $user = $request->user();
+        
+        $sentRequests = DB::table('friendships')
+            ->join('users as recipient', 'friendships.friend_id', '=', 'recipient.id')
+            ->where('friendships.user_id', $user->id)
+            ->where('friendships.status', $status)
+            ->select(
+                'friendships.id as friendship_id',
+                'friendships.status',
+                'friendships.created_at',
+                'friendships.updated_at',
+                'friendships.accepted_at',
+                'recipient.id as recipient_id',
+                'recipient.name as recipient_name',
+                'recipient.email as recipient_email',
+                'recipient.avatar as recipient_avatar'
+            )
+            ->orderBy('friendships.created_at', 'desc')
+            ->get();
+        
+        return response()->json([
+            'success' => true,
+            'message' => "Sent friend requests with status '{$status}' retrieved successfully",
+            'data' => $sentRequests
         ]);
     }
 }

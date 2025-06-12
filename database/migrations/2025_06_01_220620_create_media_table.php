@@ -6,14 +6,8 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Disable transaction wrapping for this migration.
-     */
     public $withinTransaction = false;
 
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('user_media', function (Blueprint $table) {
@@ -21,6 +15,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->integer('tmdb_id');
             $table->boolean('recommended')->default(false);
+            $table->boolean('liked')->default(false);
             $table->enum('type', ['movie', 'tv']);
             $table->enum('status', ['watching', 'completed', 'planned']);
             $table->string('episode')->nullable();
@@ -31,9 +26,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('user_media');

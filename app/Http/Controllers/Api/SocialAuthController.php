@@ -11,10 +11,8 @@ use Illuminate\Support\Str;
 
 class SocialAuthController extends Controller
 {
-    // Supported OAuth providers
     private const SUPPORTED_PROVIDERS = ['google', 'facebook'];
 
-    // Common user response structure
     private function formatUserResponse($user)
     {
         return [
@@ -30,20 +28,17 @@ class SocialAuthController extends Controller
         ];
     }
 
-    // Get Next.js URL from config
     private function getNextjsUrl()
     {
         return config('services.nextjs_url', 'http://localhost:3000');
     }
 
-    // Build Next.js redirect URL
     private function buildNextjsRedirectUrl($provider, $params)
     {
         $nextjsUrl = $this->getNextjsUrl();
         return $nextjsUrl . '/api/auth/callback/' . $provider . '?' . http_build_query($params);
     }
 
-    // Log successful social authentication
     private function logSuccessfulAuth($provider, $user, $request, $wasRecentlyCreated = null)
     {
         \Log::info('LOGIN_SOCIAL_EXITOSO', [
@@ -56,7 +51,6 @@ class SocialAuthController extends Controller
         ]);
     }
 
-    // Standard success response with token
     private function successResponseWithToken($user, $token, $message = 'Autenticación social exitosa')
     {
         return response()->json([
@@ -67,15 +61,11 @@ class SocialAuthController extends Controller
         ], 200);
     }
 
-    // Create standard auth token
     private function createAuthToken($user)
     {
         return $user->createToken('social-auth-token', ['*'], now()->addDays(30))->plainTextToken;
     }
 
-    /**
-     * Get the redirect URL for social provider
-     */
     public function getRedirectUrl($provider)
     {
         $this->validateProvider($provider);
@@ -114,7 +104,6 @@ class SocialAuthController extends Controller
     {
         $this->validateProvider($provider);
 
-        // Log de entrada para debug
         \Log::info('INICIO_CALLBACK_SOCIAL', [
             'provider' => $provider,
             'request_url' => $request->fullUrl(),
@@ -126,12 +115,10 @@ class SocialAuthController extends Controller
         ]);
 
         try {
-            // Verificar que tenemos un código de autorización
             if (!$request->has('code')) {
                 throw new \Exception('No se recibió código de autorización');
             }
 
-            // Procesar el código OAuth
             $socialUser = Socialite::driver($provider)
                 ->stateless()
                 ->user();
@@ -142,10 +129,8 @@ class SocialAuthController extends Controller
 
             $this->logSuccessfulAuth($provider, $user, $request);
 
-            // Preparar datos del usuario para la redirección
             $userData = $this->formatUserResponse($user);
 
-            // URL de redirección a Next.js
             $redirectUrl = $this->buildNextjsRedirectUrl($provider, [
                 'token' => $token,
                 'user' => base64_encode(json_encode($userData)),
@@ -162,7 +147,6 @@ class SocialAuthController extends Controller
                 'request' => $request->all()
             ]);
 
-            // En caso de error, redirigir a Next.js con el error
             $redirectUrl = $this->buildNextjsRedirectUrl($provider, [
                 'error' => 'auth_failed',
                 'message' => $e->getMessage(),
@@ -338,9 +322,6 @@ class SocialAuthController extends Controller
 
     private function findOrCreateUser($socialUser, $provider)
     {
-        // if (!$socialUser->email) {
-        //     throw new \Exception('No se pudo obtener el email del proveedor social');
-        // }
 
         $user = User::where('provider', $provider)
             ->where('provider_id', $socialUser->id)

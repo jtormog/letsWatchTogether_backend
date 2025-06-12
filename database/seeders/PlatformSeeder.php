@@ -8,9 +8,6 @@ use App\Models\Platform;
 
 class PlatformSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         $platforms = [

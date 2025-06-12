@@ -9,9 +9,6 @@ use App\Models\User;
 
 class AuthController extends Controller
 {
-    /**
-     * Handle API login
-     */
     public function login(Request $request)
     {
         $request->validate([
@@ -30,10 +27,7 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // Revoke all existing tokens for this user (optional - for single session)
-        // $user->tokens()->delete();
 
-        // Create token for API authentication
         $token = $user->createToken('auth-token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
@@ -52,25 +46,16 @@ class AuthController extends Controller
         ], 200);
     }
 
-    /**
-     * Handle API logout
-     */
     public function logout(Request $request)
     {
-        // Delete current token only
         $request->user()->currentAccessToken()->delete();
         
-        // Or delete all tokens for the user (uncomment if you want to logout from all devices)
-        // $request->user()->tokens()->delete();
 
         return response()->json([
             'message' => 'Logout exitoso',
         ], 200);
     }
 
-    /**
-     * Handle API registration
-     */
     public function register(Request $request)
     {
         $validator = $request->validate([
@@ -83,10 +68,9 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'email_verified_at' => now(), // Auto-verify for API registration
+            'email_verified_at' => now(),
         ]);
 
-        // Create token for API authentication
         $token = $user->createToken('auth-token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
@@ -103,12 +87,8 @@ class AuthController extends Controller
         ], 201);
     }
 
-    /**
-     * Logout from all devices
-     */
     public function logoutAll(Request $request)
     {
-        // Delete all tokens for the authenticated user
         $request->user()->tokens()->delete();
 
         return response()->json([
@@ -116,17 +96,12 @@ class AuthController extends Controller
         ], 200);
     }
 
-    /**
-     * Refresh token (create new token and delete old one)
-     */
     public function refresh(Request $request)
     {
         $user = $request->user();
         
-        // Delete current token
         $request->user()->currentAccessToken()->delete();
         
-        // Create new token
         $token = $user->createToken('auth-token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
